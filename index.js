@@ -6,7 +6,7 @@ const router = require('./routes/router');
 const path=require('path')
 const http = require("http");
 const { Server } = require("socket.io");
-const Message = require("./models/Message");
+const Message = require("./models/message");
 mongoose.connect('mongodb+srv://soumyamahalik:kadali90@cluster0.a4jtujh.mongodb.net/socialMediaDB')
 .then(()=>{
     console.log("Connected to MongoDB");
