@@ -2,7 +2,7 @@ const UserModel=require('../models/user');
 const crypt=require('bcrypt');
 const PostModel=require('../models/post');
 const Reel=require('../models/reel');
-const Message=require('../models/Message');
+const Message=require('../models/message');
 exports.registerUser=async(req,res)=>{
     const {username,email,password}=req.body;
     const newPassword=await crypt.hash(password,10);
