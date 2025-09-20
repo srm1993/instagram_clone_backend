@@ -1,6 +1,8 @@
 const UserModel=require('../models/user');
 const crypt=require('bcrypt');
 const PostModel=require('../models/post');
+const Reel=require('../models/reel');
+const Message=require('../models/Message');
 exports.registerUser=async(req,res)=>{
     const {username,email,password}=req.body;
     const newPassword=await crypt.hash(password,10);
@@ -146,5 +148,145 @@ exports.followUser = async (req, res) => {
     res.json({ message: "Followed successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+};
+
+// PUT /api/posts/:id/caption
+exports.updateCaption = async (req, res) => {
+  try {
+    const { caption } = req.body;
+    const post = await PostModel.findById(req.params.id);
+
+    if (!post) return res.status(404).json({ message: "Post not found" });
+    if (post.userId.toString() !== req.body.userId) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    post.caption = caption;
+    await post.save();
+
+    res.json(post);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+// DELETE /api/posts/:postId/comment/:commentId
+exports.deleteComment = async (req, res) => {
+  try {
+    const { postId, commentId } = req.params;
+    const { userId } = req.body;
+
+    const post = await PostModel.findById(postId).populate("comments.userId", "username profilePicture");
+
+    if (!post) return res.status(404).json({ message: "Post not found" });
+
+    const comment = post.comments.id(commentId);
+    if (!comment) return res.status(404).json({ message: "Comment not found" });
+
+    // Only comment owner can delete
+    if (comment.userId._id.toString() !== userId) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    comment.deleteOne();
+    await post.save();
+
+    res.json(post);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+exports.uploadReel=async (req, res) => {
+  try {
+    const { userId, caption } = req.body;
+    const newReel = new Reel({
+      userId,
+      caption,
+      videoUrl: `${req.file.filename}`,
+    });
+
+    await newReel.save();
+    res.json({ message: "Reel uploaded successfully!"});
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+exports.getAllReels = async (req, res) => {
+  try {
+    const reels = await Reel.find()
+      .populate("userId", "username profilePicture")
+      .populate("comments.userId", "username profilePicture")
+      .sort({ createdAt: -1 });
+    res.json(reels);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+exports.likeReel = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    const reel = await Reel.findById(req.params.id);
+    if (!reel) return res.status(404).json({ message: "Reel not found" });
+    if (reel.likes.includes(userId)) {
+      // unlike
+      reel.likes = reel.likes.filter((id) => id.toString() !== userId);
+    } else {
+      // like
+      reel.likes.push(userId);
+    }
+    await reel.save();
+    res.json({ message: "Updated likes", likes: reel.likes.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+exports.commentOnReel=async (req, res) => {
+  try {
+    const { userId, text } = req.body;
+    const reel = await Reel.findById(req.params.id);
+    if (!reel) return res.status(404).json({ message: "Reel not found" });
+    reel.comments.push({ userId, text });
+    await reel.save();
+    res.json({ message: "Comment added", comments: reel.comments });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+exports.getMessages= async (req, res) => {
+  const { userId, friendId } = req.params;
+  const messages = await Message.find({
+    $or: [
+      { senderId: userId, receiverId: friendId },
+      { senderId: friendId, receiverId: userId },
+    ],
+  }).sort({ createdAt: 1 });
+  res.json(messages);
+}
+
+exports.fetchUser=async(req,res)=>{
+  try {
+    const user = await UserModel.findById(req.params.id).select("-password");
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: "User not found" });
+  }
+}
+exports.getFollowers = async (req, res) => {
+  try {
+    const userId = req.params.userId; // logged-in user id from route
+    const user = await UserModel.findById(userId)
+      .populate("followers", "username email profilePicture") // populate followers info
+      .exec();
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json(user.followers);
+  } catch (err) {
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
